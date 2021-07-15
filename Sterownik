@@ -1,0 +1,342 @@
+#include <RTClib.h>
+#include <Wire.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <Arduino.h>
+#include <U8x8lib.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_AM2320.h>
+ 
+#define Wentylatory 5
+#define Swiatlo 6
+#define OnHour 11
+#define OnMin 0
+#define OffHour 20
+#define OffMin 30
+#define Godz now.hour()
+#define Min now.minute()
+#define Sec now.second()
+
+U8X8_SH1106_128X64_NONAME_HW_I2C u8x8(/* reset=*/ U8X8_PIN_NONE);
+Adafruit_AM2320 am2320 = Adafruit_AM2320();
+
+RTC_DS1307 rtc;
+OneWire oneWire(2);
+DallasTemperature sensors(&oneWire);
+
+int brightness = 255;
+float tempLampa1 = 0;
+float tempLampa2 = 0;
+float tempWoda = 0;  
+
+
+void setup()
+
+{ //rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+
+  Serial.begin(9600);
+  rtc.begin();
+  Wire.begin();
+  am2320.begin();
+  sensors.begin();
+  pinMode(Swiatlo, OUTPUT);
+  pinMode(Wentylatory, OUTPUT);
+  u8x8.begin(); 
+ }
+
+
+void loop() {
+
+   DateTime now = rtc.now();
+   u8x8.setFont(u8x8_font_courB18_2x3_f);
+   u8x8.setCursor(0, 0);
+   if (Godz >= 0 and Godz < 10)
+            {u8x8.print("0");
+             u8x8.print(Godz);}
+            else
+            {u8x8.print(Godz);}
+   u8x8.print(":");
+   if (Min >= 0 and Min < 10)
+            {u8x8.print("0");
+             u8x8.print(Min);}
+            else
+            {u8x8.print(Min);}
+   u8x8.print(":");
+   if (Sec >= 0 and Sec < 10)
+            {u8x8.print("0");
+             u8x8.print(Sec);}
+            else
+            {u8x8.print(Sec);}
+   u8x8.setFont(u8x8_font_chroma48medium8_r );
+   u8x8.setCursor(0, 3);
+   u8x8.setInverseFont(1);
+   
+   u8x8.print("Woda:    ");if (tempWoda<0)
+   {u8x8.print(" -0-");}
+    else
+    { u8x8.print(tempWoda);}
+   u8x8.print("'C");
+   u8x8.setCursor(0, 4);
+   
+   u8x8.setInverseFont(0);
+   u8x8.print("Swiatlo: ");
+   if (brightness<255)
+   {u8x8.print(100-((brightness*100)/230));
+    u8x8.print("%");}
+    else
+    { u8x8.print("-0-");}
+   u8x8.setCursor(0, 5);
+   u8x8.print("L:"); if (tempLampa1<0)
+   {u8x8.print("-0-");}
+    else
+    { u8x8.print(tempLampa1);}    
+   u8x8.print(" P:");if (tempLampa2<0)
+   {u8x8.print("-0-");}
+    else
+    { u8x8.print(tempLampa2);}
+    
+    u8x8.setCursor(0, 6);
+   u8x8.print("T:"); u8x8.print(am2320.readTemperature()); u8x8.print(" Rh:");u8x8.print(am2320.readHumidity());
+   
+    analogWrite(Swiatlo, brightness);
+
+    Serial.print(now.hour(), DEC); // Only For Serial Monitor
+    Serial.print(':');
+    Serial.print(now.minute(), DEC);
+    Serial.print(':');
+    Serial.print(now.second(), DEC);
+    Serial.println();
+
+    Serial.print("T_Lampy1:  ");
+    Serial.print(tempLampa1, 2);
+    Serial.println(" *C");
+    
+    Serial.print("T_Lampy2:  ");
+    Serial.print(tempLampa2, 2);
+    Serial.println(" *C");
+
+    Serial.print("T_Wody:  ");
+    Serial.print(tempWoda, 2);
+    Serial.println(" *C");
+
+    Serial.print("Swiatlo: ");
+       if (brightness<255)
+   {Serial.print(100-((brightness*100)/230));
+    Serial.println("%");}
+    else
+    { Serial.println("Wyl");}
+
+    Serial.print("Wentylatory ");
+    Serial.println(digitalRead(Wentylatory));
+    Serial.println("");
+
+    sensors.requestTemperatures(); //Pobranie temperatury czujnika
+
+    tempLampa1 = sensors.getTempCByIndex(0); //Wyswietlenie informacji z czujnika
+    tempLampa2 = sensors.getTempCByIndex(2);
+    tempWoda = sensors.getTempCByIndex(1);
+
+    if ((tempLampa1 >= 30.00) || (tempLampa2 >= 30.00))
+    {digitalWrite(Wentylatory, HIGH); }//zalacz wentylatory
+    else if ((tempLampa1 < 27.00) && (tempLampa2 < 27.00))
+    {digitalWrite(Wentylatory, LOW);} //wylacz wentylatory
+       
+    if ((tempLampa1 >= 50.00) || (tempLampa2 >= 50.00)) //wylacz swiatlo  
+     {brightness=255;}
+     
+    else if(Godz == OnHour && Min == OnMin && Sec == 0)
+    { brightness = 215;}  
+
+    else if(Godz == OnHour && Min == OnMin && Sec == 1)
+    { brightness = 226;}
+
+    else if(Godz == OnHour && Min == OnMin +1)
+    { brightness = 225;}
+    
+    else if(Godz == OnHour && Min == OnMin +2)
+    { brightness = 220;}
+
+    else if(Godz == OnHour && Min == OnMin +3)
+    { brightness = 217;}
+
+    else if(Godz == OnHour && Min == OnMin +4)
+    { brightness = 215;}
+    
+    else if(Godz == OnHour && Min == OnMin +5)
+    { brightness = 203;}   
+
+    else if(Godz == OnHour && Min == OnMin +6)
+    { brightness = 196;}
+
+    else if(Godz == OnHour && Min == OnMin +7)
+    { brightness = 189;}
+
+    else if(Godz == OnHour && Min == OnMin +8)
+    { brightness = 182;}
+
+    else if(Godz == OnHour && Min == OnMin +9)
+    { brightness = 175;}
+
+    else if(Godz == OnHour && Min == OnMin +10)
+    { brightness = 168;}
+
+    else if(Godz == OnHour && Min == OnMin +11)
+    { brightness = 161;} 
+
+    else if(Godz == OnHour && Min == OnMin +12)
+    { brightness = 154;}
+
+    else if(Godz == OnHour && Min == OnMin +13)
+    { brightness = 147;}
+
+    else if(Godz == OnHour && Min == OnMin +14)
+    { brightness = 140;}
+
+    else if(Godz == OnHour && Min == OnMin +15)
+    { brightness = 133;}
+
+    else if(Godz == OnHour && Min == OnMin +16)
+    { brightness = 126;}
+
+    else if(Godz == OnHour && Min == OnMin +17)
+    { brightness = 119;}
+
+    else if(Godz == OnHour && Min == OnMin +18)
+    { brightness = 112;}     
+
+    else if(Godz == OnHour && Min == OnMin +19)
+    { brightness = 105;}    
+
+    else if(Godz == OnHour && Min == OnMin +20)
+    { brightness = 98;}  
+
+    else if(Godz == OnHour && Min == OnMin +21)
+    { brightness = 91;}
+     
+    else if(Godz == OnHour && Min == OnMin +22)
+    { brightness = 84;}   
+
+    else if(Godz == OnHour && Min == OnMin +23)
+    { brightness = 77;}
+
+    else if(Godz == OnHour && Min == OnMin +24)
+    { brightness = 70;} 
+
+    else if(Godz == OnHour && Min == OnMin +25)
+    { brightness = 63;} 
+
+    else if(Godz == OnHour && Min == OnMin +26)
+    { brightness = 56;}     
+
+    else if(Godz == OnHour && Min == OnMin +27)
+    { brightness = 40;}   
+
+    else if(Godz == OnHour && Min == OnMin +28)
+    { brightness = 25;}
+     
+    else if(Godz == OnHour && Min == OnMin +29)
+    { brightness = 10;}     
+
+    else if(Godz == OnHour && Min == OnMin +30)
+    { brightness = 0;}     
+
+    else if(Godz > OnHour && Godz < OffHour)
+    { brightness = 0;}
+
+
+    
+
+    else if(Godz == OffHour && Min == OffMin)
+    { brightness = 10;}
+    
+    else if(Godz == OffHour && Min == OffMin +1)
+    { brightness = 35 ;}
+
+    else if(Godz == OffHour && Min == OffMin +2)
+    { brightness = 42;}
+
+    else if(Godz == OffHour && Min == OffMin +3)
+    { brightness = 49;}
+
+    else if(Godz == OffHour && Min == OffMin +4)
+    { brightness = 56;}   
+
+    else if(Godz == OffHour && Min == OffMin +5)
+    { brightness = 63;}
+
+    else if(Godz == OffHour && Min == OffMin +6)
+    { brightness = 70;}
+
+    else if(Godz == OffHour && Min == OffMin +7)
+    { brightness = 77;}
+ 
+    else if(Godz == OffHour && Min == OffMin +8)
+    { brightness = 84;}   
+
+    else if(Godz == OffHour && Min == OffMin +9)
+    { brightness = 91;}
+
+    else if(Godz == OffHour && Min == OffMin +10)
+    { brightness = 98;}
+
+    else if(Godz == OffHour && Min == OffMin +11)
+    { brightness = 105;}
+    
+    else if(Godz == OffHour && Min == OffMin +12)
+    { brightness = 112;}
+
+    else if(Godz == OffHour && Min == OffMin +13)
+    { brightness = 119;}   
+
+    else if(Godz == OffHour && Min == OffMin +14)
+    { brightness = 126;}   
+
+    else if(Godz == OffHour && Min == OffMin +15)
+    { brightness = 133;}  
+
+    else if(Godz == OffHour && Min == OffMin +16)
+    { brightness = 140;}
+
+    else if(Godz == OffHour && Min == OffMin +17)
+    { brightness = 147;}  
+
+    else if(Godz == OffHour && Min == OffMin +18)
+    { brightness = 154;}
+    
+    else if(Godz == OffHour && Min == OffMin +19)
+    { brightness = 161;}   
+
+    else if(Godz == OffHour && Min == OffMin +22)
+    { brightness = 168;}
+    
+    else if(Godz == OffHour && Min == OffMin +21)
+    { brightness = 175;}
+
+    else if(Godz == OffHour && Min == OffMin +22)
+    { brightness = 182;}
+    
+    else if(Godz == OffHour && Min == OffMin +23)
+    { brightness = 189;}
+
+    else if(Godz == OffHour && Min == OffMin +24)
+    { brightness = 196;}  
+
+    else if(Godz == OffHour && Min == OffMin +25)
+    { brightness = 203;}
+
+    else if(Godz == OffHour && Min == OffMin +26)
+    { brightness = 210;}   
+
+    else if(Godz == OffHour && Min == OffMin +27)
+    { brightness = 217;}    
+
+    else if(Godz == OffHour && Min == OffMin +28)
+    { brightness = 224;}
+
+    else if(Godz == OffHour && Min == OffMin +29)
+    { brightness = 228;}
+    
+    else if(Godz == OffHour && Min == OffMin +30)
+    { brightness = 255;
+     u8x8.clear();}  
+}
