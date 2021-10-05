@@ -2,14 +2,16 @@
 #include <Wire.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <Arduino.h>
-#include <U8x8lib.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_AM2320.h>
- 
+#include <Wire.h>
+#include "SSD1306Ascii.h"
+#include "SSD1306AsciiWire.h"
+
+
+#define I2C_ADDRESS 0x3C
+#define RST_PIN -1
 #define Wentylatory 5
 #define Swiatlo 6
-#define OnHour 11
+#define OnHour 9
 #define OnMin 0
 #define OffHour 20
 #define OffMin 30
@@ -17,10 +19,10 @@
 #define Min now.minute()
 #define Sec now.second()
 
-U8X8_SH1106_128X64_NONAME_HW_I2C u8x8(/* reset=*/ U8X8_PIN_NONE);
-Adafruit_AM2320 am2320 = Adafruit_AM2320();
 
-RTC_DS1307 rtc;
+SSD1306AsciiWire oled;
+
+RTC_DS3231 rtc;
 OneWire oneWire(2);
 DallasTemperature sensors(&oneWire);
 
@@ -37,70 +39,86 @@ void setup()
   Serial.begin(9600);
   rtc.begin();
   Wire.begin();
-  am2320.begin();
+  Wire.setClock(400000L);
   sensors.begin();
   pinMode(Swiatlo, OUTPUT);
   pinMode(Wentylatory, OUTPUT);
-  u8x8.begin(); 
+
+#if RST_PIN >= 0
+  oled.begin(&SH1106_128x64, I2C_ADDRESS, RST_PIN);
+#else // RST_PIN >= 0
+  oled.begin(&SH1106_128x64, I2C_ADDRESS);
+#endif // RST_PIN >= 0
+
+  oled.setFont(font8x8);
+  
  }
 
 
 void loop() {
 
    DateTime now = rtc.now();
-   u8x8.setFont(u8x8_font_courB18_2x3_f);
-   u8x8.setCursor(0, 0);
+   
+  oled.set2X();
+  oled.clear();
+  oled.setCursor(5, 1);
    if (Godz >= 0 and Godz < 10)
-            {u8x8.print("0");
-             u8x8.print(Godz);}
+            {oled.print("0");
+             oled.print(Godz);}
             else
-            {u8x8.print(Godz);}
-   u8x8.print(":");
+            {oled.print(Godz);}
+   oled.print(":");
    if (Min >= 0 and Min < 10)
-            {u8x8.print("0");
-             u8x8.print(Min);}
+            {oled.print("0");
+             oled.print(Min);}
             else
-            {u8x8.print(Min);}
-   u8x8.print(":");
+            {oled.print(Min);}
+   oled.print(":");
    if (Sec >= 0 and Sec < 10)
-            {u8x8.print("0");
-             u8x8.print(Sec);}
+            {oled.print("0");
+             oled.print(Sec);}
             else
-            {u8x8.print(Sec);}
-   u8x8.setFont(u8x8_font_chroma48medium8_r );
-   u8x8.setCursor(0, 3);
-   u8x8.setInverseFont(1);
-   
-   u8x8.print("Woda:    ");if (tempWoda<0)
-   {u8x8.print(" -0-");}
+            {oled.print(Sec);}
+
+   oled.setInvertMode(1%2);
+   oled.set1X();
+   oled.setCursor(0, 4);
+   oled.print("Woda:    ");
+    oled.setCursor(64, 4);
+    if (tempWoda<0)
+   {oled.print(" -0-");}
     else
-    { u8x8.print(tempWoda);}
-   u8x8.print("'C");
-   u8x8.setCursor(0, 4);
+    { oled.print(tempWoda);}
+   oled.print("'C");
    
-   u8x8.setInverseFont(0);
-   u8x8.print("Swiatlo: ");
+   oled.setCursor(0, 5);
+   oled.setInvertMode(2%2);
+   oled.print("Swiatlo: ");
+    oled.setCursor(64, 5);
    if (brightness<255)
-   {u8x8.print(100-((brightness*100)/230));
-    u8x8.print("%");}
+   {oled.print(100-((brightness*100)/230));
+    oled.print("%");}
     else
-    { u8x8.print("-0-");}
-   u8x8.setCursor(0, 5);
-   u8x8.print("L:"); if (tempLampa1<0)
-   {u8x8.print("-0-");}
+    { oled.print("-0-");}
+   oled.setCursor(0, 6);
+   oled.print("L:"); if (tempLampa1<0)
+   {oled.print("-0-");}
     else
-    { u8x8.print(tempLampa1);}    
-   u8x8.print(" P:");if (tempLampa2<0)
-   {u8x8.print("-0-");}
+    { oled.print(tempLampa1);}
+    oled.setCursor(64, 6);    
+   oled.print("P:");if (tempLampa2<0)
+   {oled.print("-0-");}
     else
-    { u8x8.print(tempLampa2);}
+    { oled.print(tempLampa2);}
     
-    u8x8.setCursor(0, 6);
-   u8x8.print("T:"); u8x8.print(am2320.readTemperature()); u8x8.print(" Rh:");u8x8.print(am2320.readHumidity());
+    oled.setCursor(0, 7);
+  oled.print("RTC:"); 
+   oled.setCursor(64, 7);
+  oled.print(rtc.getTemperature());
    
     analogWrite(Swiatlo, brightness);
 
-    Serial.print(now.hour(), DEC); // Only For Serial Monitor
+    /*Serial.print(now.hour(), DEC); // Only For Serial Monitor
     Serial.print(':');
     Serial.print(now.minute(), DEC);
     Serial.print(':');
@@ -129,17 +147,17 @@ void loop() {
     Serial.print("Wentylatory ");
     Serial.println(digitalRead(Wentylatory));
     Serial.println("");
-
+*/
     sensors.requestTemperatures(); //Pobranie temperatury czujnika
 
     tempLampa1 = sensors.getTempCByIndex(0); //Wyswietlenie informacji z czujnika
     tempLampa2 = sensors.getTempCByIndex(2);
     tempWoda = sensors.getTempCByIndex(1);
 
-    if ((tempLampa1 >= 30.00) || (tempLampa2 >= 30.00))
-    {digitalWrite(Wentylatory, HIGH); }//zalacz wentylatory
-    else if ((tempLampa1 < 27.00) && (tempLampa2 < 27.00))
-    {digitalWrite(Wentylatory, LOW);} //wylacz wentylatory
+    if ((tempLampa1 >= 45.00) || (tempLampa2 >= 45.00))
+    {analogWrite(Wentylatory, 255); }//zalacz wentylatory
+    else if ((tempLampa1 < 35.00) && (tempLampa2 < 35.00))
+    {analogWrite(Wentylatory, 0);} //wylacz wentylatory
        
     if ((tempLampa1 >= 50.00) || (tempLampa2 >= 50.00)) //wylacz swiatlo  
      {brightness=255;}
@@ -338,5 +356,5 @@ void loop() {
     
     else if(Godz == OffHour && Min == OffMin +30)
     { brightness = 255;
-     u8x8.clear();}  
+     }  
 }
