@@ -1,0 +1,394 @@
+#include <Arduino.h>
+
+#include <Wire.h>
+
+#include "RTClib.h"
+
+#include <OneWire.h>
+
+#include <DallasTemperature.h>
+
+#include "SSD1306Ascii.h"
+
+#include "SSD1306AsciiWire.h"
+
+ 
+
+RTC_DS3231 m_rtc; ///< DS1307 RTC
+
+ 
+
+#define I2C_ADDRESS 0x3C
+
+#define RST_PIN -1
+
+const byte Wentylatory = 5;
+
+const byte  m_pwm_pin = 6;   ///< pin for led
+
+const DateTime m_start_time = DateTime(2000, 0, 0, 11, 0, 0);
+
+const DateTime m_start_time2 = DateTime(2000, 0, 0, 20, 30, 0);///< time when surise start
+
+const uint8_t m_sunrise_time = 30;
+
+const int m_sunset_time = 30;///< duration of sunrise
+
+const uint8_t m_min_in_h = 60;        ///< minutes in an hour
+
+const unsigned long m_refresh_time_ms = 1000;  ///< time of repeting check time is in range and sending message
+
+const uint8_t m_starting_pwm = 0;     ///< starting duty cycle pwm for sunrise
+
+const uint8_t m_pwm_resolution = 255; ///< finish duty cycle pwm for sunrise
+
+OneWire oneWire(2);
+
+DallasTemperature sensors(&oneWire);
+
+float tempLampa1 = 0;
+
+float tempLampa2 = 0;
+
+float tempWoda = 0; 
+
+ 
+
+SSD1306AsciiWire oled;
+
+/**
+
+* @brief calculate hours and minutes to only minutes
+
+* @param time hours and minutes to calculate
+
+* @return minutes
+
+*/
+
+uint16_t min_calculate(const DateTime& time)
+
+{
+
+  uint16_t time_minute = time.hour() * m_min_in_h;
+
+  time_minute += time.minute();
+
+  return time_minute;
+
+}
+
+ 
+
+/**
+
+* @brief changing duty cycle pwm output proportionally to sunrise progress
+
+* @param time_in_min time from sunrise start
+
+*/
+
+void sunrise(const int time_in_min)
+
+{
+
+  auto pwm = map(time_in_min, 0, m_sunrise_time, m_pwm_resolution, m_starting_pwm);
+
+  analogWrite(m_pwm_pin, pwm);
+
+oled.setCursor(0, 5);
+
+    oled.print("Swiatlo: ");
+
+    oled.setCursor(64, 5);
+    oled.print(100-((pwm*100)/230));
+    oled.print("%");
+    oled.clear();
+  Serial.println(pwm);
+
+}
+
+ 
+
+void sunset(const int time_in_min)
+
+{
+
+  auto pwm = map(time_in_min, 0, m_sunset_time, m_starting_pwm, m_pwm_resolution);
+
+  analogWrite(m_pwm_pin, pwm);
+  
+oled.setCursor(0, 5);
+
+    oled.print("Swiatlo: ");
+
+    oled.setCursor(64, 5);
+    oled.print(100-((pwm*100)/230));
+    oled.print("%");
+    oled.clear();
+  Serial.println(pwm);
+
+}
+
+/**
+
+* @brief setup
+
+*/
+
+void setup()
+
+{
+
+  Wire.begin();
+
+  Serial.begin(9600);
+
+   sensors.begin(); 
+
+ 
+
+  if (!m_rtc.begin())
+
+  {
+
+    Serial.println("Couldn't find RTC");
+
+  }
+
+ 
+
+  if (!m_rtc.begin())
+
+  {
+
+    Serial.println("RTC is NOT running, let's set the time!");   
+
+  }
+
+ 
+
+// m_rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+
+  analogWrite(m_pwm_pin, 0);
+
+ 
+
+  pinMode(Wentylatory, OUTPUT);
+
+ 
+
+  #if RST_PIN >= 0
+
+  oled.begin(&SH1106_128x64, I2C_ADDRESS, RST_PIN);
+
+#else // RST_PIN >= 0
+
+  oled.begin(&SH1106_128x64, I2C_ADDRESS);
+
+#endif // RST_PIN >= 0
+
+  oled.setFont(font8x8);
+ DateTime now = m_rtc.now();
+if(now.hour()<11||now.hour()>20&&now.minute()>30)
+{analogWrite(m_pwm_pin,255);}
+
+else if(now.hour()>=11&&now.minute()>30||now.hour()<=20&&now.minute()<30)
+{analogWrite(m_pwm_pin,0);}
+}
+
+
+/**
+
+* @brief main loop
+
+*/
+
+void loop()
+
+{  sensors.requestTemperatures(); //Pobranie temperatury czujnika
+
+ 
+
+    tempLampa1 = sensors.getTempCByIndex(0); //Wyswietlenie informacji z czujnika
+
+    tempLampa2 = sensors.getTempCByIndex(2);
+
+    tempWoda = sensors.getTempCByIndex(1);
+
+  static unsigned long last_loop_time = 0;
+
+  unsigned long loop_time = millis();
+
+  if(loop_time - last_loop_time > m_refresh_time_ms)
+
+  {
+
+    DateTime now = m_rtc.now();
+
+    Serial.print(now.hour(), DEC);
+
+    Serial.print(":");
+
+    Serial.print(now.minute(), DEC);
+
+    Serial.print(":");
+
+    Serial.println(now.second(), DEC);
+
+    Serial.println(tempLampa1);
+
+    Serial.println(tempLampa2);
+
+    Serial.println(tempWoda);
+
+    oled.set2X();
+
+  //oled.clear();
+
+  oled.setCursor(5, 1);
+
+   if (now.hour() >= 0 and now.hour() < 10)
+
+            {oled.print("0");
+
+            oled.print(now.hour());}
+
+            else
+
+            {oled.print(now.hour());}
+
+   oled.print(":");
+
+   if (now.minute() >= 0 and now.minute() < 10)
+
+            {oled.print("0");
+
+             oled.print(now.minute());}
+
+            else
+
+            {oled.print(now.minute());}
+
+   oled.print(":");
+
+   if (now.second() >= 0 and now.second() < 10)
+
+            {oled.print("0");
+
+             oled.print(now.second());}
+
+            else
+
+            {oled.print(now.second());}
+
+ 
+
+   oled.setInvertMode(1%2);
+
+   oled.set1X();
+
+   oled.setCursor(0, 4);
+
+   oled.print("Woda:    ");
+
+    oled.setCursor(64, 4);
+
+    if (tempWoda<0)
+
+   {oled.print(" -0-");}
+
+    else
+
+    { oled.print(tempWoda);}
+
+   oled.print("'C");
+
+  
+oled.setInvertMode(2%2);
+
+/*   oled.setCursor(0, 5);
+
+    oled.print("Swiatlo: ");
+
+    oled.setCursor(64, 5);
+
+   if (brightness<255)
+
+   {oled.print(100-((brightness*100)/230));
+
+    oled.print("%");}
+
+    else
+
+    { oled.print("-0-");}
+
+*/   oled.setCursor(0, 6);
+
+   oled.print("L:"); if (tempLampa1<0)
+
+   {oled.print("-0-");}
+
+    else
+
+    { oled.print(tempLampa1);}
+
+    oled.setCursor(64, 6);   
+
+   oled.print("P:");if (tempLampa2<0)
+
+   {oled.print("-0-");}
+
+    else
+
+    { oled.print(tempLampa2);}
+
+   
+
+    oled.setCursor(0, 7);
+
+  oled.print("RTC:");
+
+   oled.setCursor(64, 7);
+
+  oled.print(m_rtc.getTemperature());
+
+ 
+
+    
+
+    last_loop_time = millis();
+
+    auto sunrise_time = min_calculate(now) - min_calculate(m_start_time);
+
+    if((sunrise_time >= 0) && (sunrise_time <= m_sunrise_time ))
+
+    {
+
+      sunrise(sunrise_time);
+
+    }
+
+    auto sunset_time = min_calculate(now) - min_calculate(m_start_time2);
+
+    if((sunset_time >= 0) && (sunset_time <= m_sunset_time ))
+
+    {
+
+      sunset(sunset_time);
+
+    }
+
+if ((tempLampa1 >= 40.00) || (tempLampa2 >= 40.00))
+
+    {analogWrite(Wentylatory, 255); }//zalacz wentylatory
+
+    else if ((tempLampa1 < 30.00) && (tempLampa2 < 30.00))
+
+    {analogWrite(Wentylatory, 0);} //wylacz wentylatory
+
+   
+
+  }
+
+}
